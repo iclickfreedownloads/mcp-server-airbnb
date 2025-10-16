@@ -139,6 +139,7 @@ const AIRBNB_LISTING_DETAILS_TOOL: Tool = {
 const AIRBNB_TOOLS = [
   AIRBNB_SEARCH_TOOL,
   AIRBNB_LISTING_DETAILS_TOOL,
+  ...photoAnalysisTools,
 ] as const;
 
 // Utility functions
@@ -695,6 +696,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "airbnb_listing_details": {
         result = await handleAirbnbListingDetails(request.params.arguments);
+        break;
+      }
+
+      case "getListingPhotos":
+      case "analyzeListingPhotos": {
+        result = await handlePhotoAnalysisTool(request.params.name, request.params.arguments);
         break;
       }
 
