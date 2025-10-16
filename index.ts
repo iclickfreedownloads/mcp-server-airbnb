@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { photoAnalysisTools, handlePhotoAnalysisTool } from './photoTools';
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
