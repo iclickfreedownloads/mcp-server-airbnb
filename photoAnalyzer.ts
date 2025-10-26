@@ -1,9 +1,28 @@
 import fetch from "node-fetch";
 import * as cheerio from "cheerio";
 
-export async function extractListingPhotos(listingId: string) {
+export async function extractListingPhotos(
+  listingId: string,
+  isPathAllowed?: (path: string) => boolean,
+  ignoreRobotsTxt: boolean = false,
+  IGNORE_ROBOTS_TXT: boolean = false
+) {
   try {
     const url = `https://www.airbnb.com/rooms/${listingId}`;
+    const path = `/rooms/${listingId}`;
+
+    // Check robots.txt if not ignored
+    if (!ignoreRobotsTxt && !IGNORE_ROBOTS_TXT && isPathAllowed && !isPathAllowed(path)) {
+      return {
+        listingId,
+        photoUrls: [],
+        photoCount: 0,
+        extractionSuccess: false,
+        error: 'Path disallowed by robots.txt',
+        timestamp: new Date().toISOString(),
+      };
+    }
+
     const response = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0' },
     });

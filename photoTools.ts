@@ -8,6 +8,7 @@ export const photoAnalysisTools = [
       type: 'object',
       properties: {
         id: { type: 'string', description: 'Airbnb listing ID' },
+        ignoreRobotsTxt: { type: 'boolean', description: 'Ignore robots.txt rules for this request' },
       },
       required: ['id'],
     },
@@ -19,15 +20,23 @@ export const photoAnalysisTools = [
       type: 'object',
       properties: {
         id: { type: 'string', description: 'Airbnb listing ID' },
+        ignoreRobotsTxt: { type: 'boolean', description: 'Ignore robots.txt rules for this request' },
       },
       required: ['id'],
     },
   },
 ];
 
-export async function handlePhotoAnalysisTool(toolName: string, toolInput: any) {
+export async function handlePhotoAnalysisTool(
+  toolName: string,
+  toolInput: any,
+  isPathAllowed?: (path: string) => boolean,
+  IGNORE_ROBOTS_TXT: boolean = false
+) {
   try {
     const listingId = toolInput.id;
+    const ignoreRobotsTxt = toolInput.ignoreRobotsTxt || false;
+
     if (!listingId) {
       return {
         content: [{ type: 'text', text: JSON.stringify({ error: 'Listing ID required' }) }],
@@ -35,7 +44,7 @@ export async function handlePhotoAnalysisTool(toolName: string, toolInput: any) 
       };
     }
 
-    const photos = await extractListingPhotos(listingId);
+    const photos = await extractListingPhotos(listingId, isPathAllowed, ignoreRobotsTxt, IGNORE_ROBOTS_TXT);
 
     if (toolName === 'getListingPhotos') {
       return {

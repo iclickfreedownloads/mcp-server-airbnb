@@ -82,7 +82,7 @@ const AIRBNB_SEARCH_TOOL = {
         type: "string",
         description: "Base64-encoded string used for Pagination"
       },
-      ignoreRobotsText: {
+      ignoreRobotsTxt: {
         type: "boolean",
         description: "Ignore robots.txt rules for this request"
       }
@@ -125,7 +125,26 @@ const AIRBNB_LISTING_DETAILS_TOOL = {
         type: "number",
         description: "Number of pets"
       },
-      ignoreRobotsText: {
+      ignoreRobotsTxt: {
+        type: "boolean",
+        description: "Ignore robots.txt rules for this request"
+      }
+    },
+    required: ["id"]
+  }
+};
+
+const AIRBNB_DESCRIPTION_REVIEW_TOOL = {
+  name: "airbnb_analyze_description_reviews",
+  description: "Analyze the description and reviews of a specific Airbnb listing. Extract description text and review summaries.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      id: {
+        type: "string",
+        description: "The Airbnb listing ID"
+      },
+      ignoreRobotsTxt: {
         type: "boolean",
         description: "Ignore robots.txt rules for this request"
       }
@@ -137,6 +156,7 @@ const AIRBNB_LISTING_DETAILS_TOOL = {
 const AIRBNB_TOOLS = [
   AIRBNB_SEARCH_TOOL,
   AIRBNB_LISTING_DETAILS_TOOL,
+  AIRBNB_DESCRIPTION_REVIEW_TOOL,
   ...photoAnalysisTools,
 ];
 
@@ -251,7 +271,7 @@ async function handleAirbnbSearch(params: any) {
     minPrice,
     maxPrice,
     cursor,
-    ignoreRobotsText = false,
+    ignoreRobotsTxt = false,
   } = params;
 
   const searchUrl = new URL(`${BASE_URL}/s/${encodeURIComponent(location)}/homes`);
@@ -280,7 +300,7 @@ async function handleAirbnbSearch(params: any) {
   }
 
   const path = searchUrl.pathname + searchUrl.search;
-  if (!ignoreRobotsText && !isPathAllowed(path)) {
+  if (!ignoreRobotsTxt && !IGNORE_ROBOTS_TXT && !isPathAllowed(path)) {
     log('warn', 'Search blocked by robots.txt', { path, url: searchUrl.toString() });
     return {
       content: [{
@@ -434,7 +454,7 @@ async function handleAirbnbListingDetails(params: any) {
     children = 0,
     infants = 0,
     pets = 0,
-    ignoreRobotsText = false,
+    ignoreRobotsTxt = false,
   } = params;
 
   const listingUrl = new URL(`${BASE_URL}/rooms/${id}`);
@@ -456,7 +476,7 @@ async function handleAirbnbListingDetails(params: any) {
   }
 
   const path = listingUrl.pathname + listingUrl.search;
-  if (!ignoreRobotsText && !isPathAllowed(path)) {
+  if (!ignoreRobotsTxt && !IGNORE_ROBOTS_TXT && !isPathAllowed(path)) {
     log('warn', 'Listing details blocked by robots.txt', { path, url: listingUrl.toString() });
     return {
       content: [{
@@ -596,6 +616,162 @@ async function handleAirbnbListingDetails(params: any) {
   }
 }
 
+async function handleAirbnbDescriptionReviews(params: any) {
+  const {
+    id,
+    ignoreRobotsTxt = false,
+  } = params;
+
+  const listingUrl = new URL(`${BASE_URL}/rooms/${id}`);
+
+  const path = listingUrl.pathname + listingUrl.search;
+  if (!ignoreRobotsTxt && !IGNORE_ROBOTS_TXT && !isPathAllowed(path)) {
+    log('warn', 'Description/reviews analysis blocked by robots.txt', { path, url: listingUrl.toString() });
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          error: robotsErrorMessage,
+          url: listingUrl.toString(),
+          suggestion: "Consider enabling 'ignore_robots_txt' in extension settings if needed for testing"
+        }, null, 2)
+      }],
+      isError: true
+    };
+  }
+
+  try {
+    log('info', 'Fetching description and reviews', { id });
+
+    const response = await fetchWithUserAgent(listingUrl.toString());
+    const html = await response.text();
+    const $ = cheerio.load(html);
+
+    let analysisData: any = {};
+
+    try {
+      const scriptElement = $("#data-deferred-state-0").first();
+      if (scriptElement.length === 0) {
+        throw new Error("Could not find data script element - page structure may have changed");
+      }
+
+      const scriptContent = $(scriptElement).text();
+      if (!scriptContent) {
+        throw new Error("Data script element is empty");
+      }
+
+      const clientData = JSON.parse(scriptContent).niobeClientData[0][1];
+      const sections = clientData.data.presentation.stayProductDetailPage.sections.sections;
+
+      // Extract description
+      const descriptionSection = sections.find((s: any) => s.sectionId === "DESCRIPTION_DEFAULT");
+      let description = "";
+      if (descriptionSection?.section?.htmlDescription?.htmlText) {
+        // Strip HTML tags for cleaner text
+        const descHtml = descriptionSection.section.htmlDescription.htmlText;
+        description = cheerio.load(descHtml).text().trim();
+      }
+
+      // Extract reviews data
+      const reviewsSection = sections.find((s: any) => s.sectionId === "REVIEWS_DEFAULT");
+      let reviews: any = {
+        overallRating: null,
+        reviewCount: 0,
+        categoryRatings: {},
+        recentReviews: []
+      };
+
+      if (reviewsSection?.section) {
+        const reviewData = reviewsSection.section;
+
+        // Get overall rating
+        if (reviewData.overallRating) {
+          reviews.overallRating = reviewData.overallRating;
+        }
+
+        // Get review count
+        if (reviewData.reviewsCount) {
+          reviews.reviewCount = reviewData.reviewsCount;
+        }
+
+        // Get category ratings (cleanliness, accuracy, etc.)
+        if (reviewData.reviews) {
+          reviews.categoryRatings = reviewData.reviews;
+        }
+
+        // Get recent review snippets
+        if (reviewData.localizedReviews) {
+          reviews.recentReviews = reviewData.localizedReviews.slice(0, 5).map((review: any) => ({
+            author: review.author?.firstName || "Anonymous",
+            date: review.createdAt || null,
+            comment: review.comments || "",
+            rating: review.rating || null
+          }));
+        }
+      }
+
+      analysisData = {
+        listingId: id,
+        description: description,
+        reviews: reviews
+      };
+
+      log('info', 'Description and reviews fetched successfully', {
+        id,
+        hasDescription: description.length > 0,
+        reviewCount: reviews.reviewCount
+      });
+    } catch (parseError) {
+      log('error', 'Failed to parse description/reviews', {
+        error: parseError instanceof Error ? parseError.message : String(parseError),
+        id,
+        url: listingUrl.toString()
+      });
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            error: "Failed to parse description and reviews from Airbnb. The page structure may have changed.",
+            details: parseError instanceof Error ? parseError.message : String(parseError),
+            listingUrl: listingUrl.toString()
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          listingUrl: listingUrl.toString(),
+          ...analysisData
+        }, null, 2)
+      }],
+      isError: false
+    };
+  } catch (error) {
+    log('error', 'Description/reviews request failed', {
+      error: error instanceof Error ? error.message : String(error),
+      id,
+      url: listingUrl.toString()
+    });
+
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          error: error instanceof Error ? error.message : String(error),
+          listingUrl: listingUrl.toString(),
+          timestamp: new Date().toISOString()
+        }, null, 2)
+      }],
+      isError: true
+    };
+  }
+}
+
 const server = new Server(
   {
     name: "airbnb",
@@ -663,9 +839,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
         break;
       }
 
+      case "airbnb_analyze_description_reviews": {
+        result = await handleAirbnbDescriptionReviews(request.params.arguments);
+        break;
+      }
+
       case "getListingPhotos":
       case "analyzeListingPhotos": {
-        result = await handlePhotoAnalysisTool(request.params.name, request.params.arguments);
+        result = await handlePhotoAnalysisTool(
+          request.params.name,
+          request.params.arguments,
+          isPathAllowed,
+          IGNORE_ROBOTS_TXT
+        );
         break;
       }
 
