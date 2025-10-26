@@ -3,16 +3,19 @@
 startCommand:
   type: stdio
   configSchema:
-    # JSON Schema defining the configuration options for the MCP.
     type: object
     properties:
       ignoreRobotsTxt:
         type: boolean
         default: false
         description: If set to true, the server will ignore robots.txt rules.
-  commandFunction:
-    # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
-    |-
-    (config) => { const args = ['-y', '@openbnb/mcp-server-airbnb']; if (config.ignoreRobotsTxt) { args.push('--ignore-robots-txt'); } return { command: 'npx', args }; }
+  commandFunction: |-
+    (config) => {
+      const args = ['-y', '@openbnb/mcp-server-airbnb'];
+      if (config.ignoreRobotsTxt) {
+        args.push('--ignore-robots-txt');
+      }
+      return { command: 'npx', args };
+    }
   exampleConfig:
     ignoreRobotsTxt: false
