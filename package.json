@@ -5,10 +5,21 @@
   "license": "MIT",
   "type": "module",
   "author": "OpenBnB (https://openbnb.org)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openbnb-org/mcp-server-airbnb.git"
+  },
+  "homepage": "https://github.com/openbnb-org/mcp-server-airbnb#readme",
+  "bugs": {
+    "url": "https://github.com/openbnb-org/mcp-server-airbnb/issues"
+  },
   "keywords": [
     "airbnb",
     "vacation rental",
-    "travel"
+    "travel",
+    "mcp",
+    "model-context-protocol",
+    "smithery"
   ],
   "publishConfig": {
     "access": "public"

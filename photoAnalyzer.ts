@@ -1,7 +1,7 @@
 import fetch from "node-fetch";
 import * as cheerio from "cheerio";
 
-export async function extractListingPhotos(listingId) {
+export async function extractListingPhotos(listingId: string) {
   try {
     const url = `https://www.airbnb.com/rooms/${listingId}`;
     const response = await fetch(url, {
@@ -12,9 +12,9 @@ export async function extractListingPhotos(listingId) {
 
     const html = await response.text();
     const $ = cheerio.load(html);
-    const photoUrls = [];
+    const photoUrls: string[] = [];
 
-    $('img[src*="airbnb"]').each((_, el) => {
+    $('img[src*="airbnb"]').each((_: any, el: any) => {
       const src = $(el).attr('src');
       const alt = $(el).attr('alt');
       if (src && alt?.includes('photo') && photoUrls.length < 50) {
@@ -35,13 +35,13 @@ export async function extractListingPhotos(listingId) {
       photoUrls: [],
       photoCount: 0,
       extractionSuccess: false,
-      error: error.message || 'Unknown error',
+      error: (error instanceof Error ? error.message : 'Unknown error'),
       timestamp: new Date().toISOString(),
     };
   }
 }
 
-export function formatPhotosForAnalysis(photos) {
-  const photoList = photos.photoUrls.map((url, i) => `Photo ${i + 1}: ${url}`).join('\n');
+export function formatPhotosForAnalysis(photos: any) {
+  const photoList = photos.photoUrls.map((url: string, i: number) => `Photo ${i + 1}: ${url}`).join('\n');
   return `Listing ${photos.listingId}\n${photoList}`;
 }
