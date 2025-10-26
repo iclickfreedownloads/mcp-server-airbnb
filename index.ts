@@ -84,7 +84,7 @@ const AIRBNB_SEARCH_TOOL = {
       },
       ignoreRobotsTxt: {
         type: "boolean",
-        description: "Ignore robots.txt rules for this request"
+        description: "Ignore robots.txt rules for this request (defaults to true)"
       }
     },
     required: ["location"]
@@ -127,7 +127,7 @@ const AIRBNB_LISTING_DETAILS_TOOL = {
       },
       ignoreRobotsTxt: {
         type: "boolean",
-        description: "Ignore robots.txt rules for this request"
+        description: "Ignore robots.txt rules for this request (defaults to true)"
       }
     },
     required: ["id"]
@@ -146,7 +146,7 @@ const AIRBNB_DESCRIPTION_REVIEW_TOOL = {
       },
       ignoreRobotsTxt: {
         type: "boolean",
-        description: "Ignore robots.txt rules for this request"
+        description: "Ignore robots.txt rules for this request (defaults to true)"
       }
     },
     required: ["id"]
@@ -162,7 +162,8 @@ const AIRBNB_TOOLS = [
 
 const USER_AGENT = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)";
 const BASE_URL = "https://www.airbnb.com";
-const IGNORE_ROBOTS_TXT = process.env.IGNORE_ROBOTS_TXT === "true" || process.argv.slice(2).includes("--ignore-robots-txt");
+// Default to ignoring robots.txt unless explicitly set to false
+const IGNORE_ROBOTS_TXT = process.env.IGNORE_ROBOTS_TXT !== "false" && !process.argv.slice(2).includes("--respect-robots-txt");
 
 const robotsErrorMessage = "This path is disallowed by Airbnb's robots.txt to this User-agent. You may or may not want to run the server with '--ignore-robots-txt' args"
 let robotsTxtContent = "";
@@ -271,7 +272,7 @@ async function handleAirbnbSearch(params: any) {
     minPrice,
     maxPrice,
     cursor,
-    ignoreRobotsTxt = false,
+    ignoreRobotsTxt = true,
   } = params;
 
   const searchUrl = new URL(`${BASE_URL}/s/${encodeURIComponent(location)}/homes`);
@@ -454,7 +455,7 @@ async function handleAirbnbListingDetails(params: any) {
     children = 0,
     infants = 0,
     pets = 0,
-    ignoreRobotsTxt = false,
+    ignoreRobotsTxt = true,
   } = params;
 
   const listingUrl = new URL(`${BASE_URL}/rooms/${id}`);
@@ -619,7 +620,7 @@ async function handleAirbnbListingDetails(params: any) {
 async function handleAirbnbDescriptionReviews(params: any) {
   const {
     id,
-    ignoreRobotsTxt = false,
+    ignoreRobotsTxt = true,
   } = params;
 
   const listingUrl = new URL(`${BASE_URL}/rooms/${id}`);
