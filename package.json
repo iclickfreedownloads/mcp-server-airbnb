@@ -42,10 +42,12 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.1",
     "cheerio": "^1.0.0",
+    "express": "^4.21.2",
     "node-fetch": "^3.3.2",
     "robots-parser": "^3.0.1"
   },
   "devDependencies": {
+    "@types/express": "^4.17.21",
     "@types/node": "^22.13.9",
     "@types/node-fetch": "^2.6.12",
     "shx": "^0.3.4",

@@ -13,5 +13,11 @@ COPY . .
 # Build the project explicitly
 RUN npm run build
 
-# Expose the MCP server on stdio
+# Expose port for HTTP server
+EXPOSE 3000
+
+# Set default PORT environment variable
+ENV PORT=3000
+
+# Start the MCP server in HTTP mode
 CMD [ "node", "dist/index.js" ]

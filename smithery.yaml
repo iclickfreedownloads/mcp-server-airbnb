@@ -1,7 +1,7 @@
 # Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
 
 startCommand:
-  type: stdio
+  type: http
   configSchema:
     type: object
     properties:
@@ -9,13 +9,5 @@ startCommand:
         type: boolean
         default: false
         description: If set to true, the server will ignore robots.txt rules.
-  commandFunction: |-
-    (config) => {
-      const args = ['-y', '@openbnb/mcp-server-airbnb'];
-      if (config.ignoreRobotsTxt) {
-        args.push('--ignore-robots-txt');
-      }
-      return { command: 'npx', args };
-    }
   exampleConfig:
     ignoreRobotsTxt: false

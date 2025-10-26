@@ -1,6 +1,6 @@
-# Airbnb Search & Listings - Desktop Extension (DXT)
+# Airbnb Search & Listings - MCP Server
 
-A comprehensive Desktop Extension for searching Airbnb listings with advanced filtering capabilities and detailed property information retrieval. Built as a Model Context Protocol (MCP) server packaged in the Desktop Extension (DXT) format for easy installation and use with compatible AI applications.
+A comprehensive Model Context Protocol (MCP) server for searching Airbnb listings with advanced filtering capabilities and detailed property information retrieval. Supports both HTTP (for cloud deployments) and stdio (for local CLI usage) transports.
 
 ## Features
 
@@ -28,7 +28,19 @@ A comprehensive Desktop Extension for searching Airbnb listings with advanced fi
 
 ## Installation
 
-### For Claude Desktop
+### For Smithery (Cloud Deployment)
+
+Deploy instantly to Smithery's hosted platform:
+
+[![Deploy to Smithery](https://smithery.ai/badge)](https://smithery.ai/server/@openbnb/mcp-server-airbnb)
+
+Smithery deployment uses HTTP transport for better scalability, load balancing, and auto-scaling.
+
+### For Claude Desktop & Cursor (Local/CLI)
+
+This server can run locally using stdio transport.
+
+#### For Claude Desktop
 This extension is packaged as a Desktop Extension (DXT) file. To install:
 
 1. Download the `.dxt` file from the releases page
@@ -36,7 +48,7 @@ This extension is packaged as a Desktop Extension (DXT) file. To install:
 3. Install the extension through the application's extension manager
 4. Configure the extension settings as needed
 
-### For Cursor, etc.
+#### For Cursor, etc.
 
 Before starting make sure [Node.js](https://nodejs.org/) is installed on your desktop for `npx` to work.
 1. Go to: Cursor Settings > Tools & Integrations > New MCP Server
@@ -136,9 +148,27 @@ Get detailed information about a specific Airbnb listing.
 
 ### Architecture
 - **Runtime**: Node.js 18+
-- **Protocol**: Model Context Protocol (MCP) via stdio transport
+- **Protocol**: Model Context Protocol (MCP)
+- **Transports**:
+  - **HTTP** (Streamable HTTP) - For cloud deployments (Smithery, Docker)
+  - **stdio** - For local CLI usage (npx, Claude Desktop)
 - **Format**: Desktop Extension (DXT) v0.1
 - **Dependencies**: Minimal external dependencies for security and reliability
+
+### Deployment Modes
+
+The server automatically selects the appropriate transport:
+
+- **HTTP Mode**: Activated when `PORT` environment variable is set
+  - Runs Express server on the specified port
+  - Exposes `/mcp` endpoint for MCP requests
+  - Includes `/health` endpoint for monitoring
+  - Used by Smithery and Docker deployments
+
+- **stdio Mode**: Activated when `PORT` is not set
+  - Uses standard input/output for MCP communication
+  - Used for local CLI usage via npx
+  - Compatible with Claude Desktop and other MCP clients
 
 ### Error Handling
 - Comprehensive error logging with timestamps

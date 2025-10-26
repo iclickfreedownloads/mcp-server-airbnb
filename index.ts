@@ -3,6 +3,7 @@
 import { photoAnalysisTools, handlePhotoAnalysisTool } from './photoTools.js';
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -17,6 +18,7 @@ import robotsParser from "robots-parser";
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import express from 'express';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -709,33 +711,106 @@ server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
   }
 });
 
-async function runServer() {
+async function runStdioServer() {
   try {
     await fetchRobotsTxt();
-    
+
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    
+
     log('info', 'Airbnb MCP Server running on stdio', {
       version: VERSION,
       robotsRespected: !IGNORE_ROBOTS_TXT
     });
-    
-    process.on('SIGINT', () => {
-      log('info', 'Received SIGINT, shutting down gracefully');
-      process.exit(0);
-    });
-    
-    process.on('SIGTERM', () => {
-      log('info', 'Received SIGTERM, shutting down gracefully');
-      process.exit(0);
-    });
-    
+
   } catch (error) {
-    log('error', 'Failed to start server', {
+    log('error', 'Failed to start stdio server', {
       error: error instanceof Error ? error.message : String(error)
     });
     process.exit(1);
+  }
+}
+
+async function runHttpServer() {
+  try {
+    await fetchRobotsTxt();
+
+    const app = express();
+    app.use(express.json());
+
+    // Health check endpoint
+    app.get('/health', (_req, res) => {
+      res.json({ status: 'ok', version: VERSION });
+    });
+
+    // MCP endpoint
+    app.post('/mcp', async (req, res) => {
+      try {
+        // Create a new transport for each request to prevent ID collisions
+        const transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: undefined,
+          enableJsonResponse: true
+        });
+
+        // Clean up transport when response closes
+        res.on('close', () => {
+          transport.close();
+        });
+
+        // Connect server and handle the incoming request
+        await server.connect(transport);
+        await transport.handleRequest(req, res, req.body);
+      } catch (error) {
+        log('error', 'Request handling failed', {
+          error: error instanceof Error ? error.message : String(error)
+        });
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Internal server error' });
+        }
+      }
+    });
+
+    const port = parseInt(process.env.PORT || '3000');
+    app.listen(port, () => {
+      log('info', 'Airbnb MCP Server running on HTTP', {
+        version: VERSION,
+        port,
+        robotsRespected: !IGNORE_ROBOTS_TXT,
+        endpoint: `/mcp`
+      });
+    }).on('error', (error) => {
+      log('error', 'HTTP server error', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      process.exit(1);
+    });
+
+  } catch (error) {
+    log('error', 'Failed to start HTTP server', {
+      error: error instanceof Error ? error.message : String(error)
+    });
+    process.exit(1);
+  }
+}
+
+async function runServer() {
+  // Use HTTP if PORT is set (for Smithery/Docker deployment), otherwise use stdio (for CLI)
+  const useHttp = !!process.env.PORT;
+
+  process.on('SIGINT', () => {
+    log('info', 'Received SIGINT, shutting down gracefully');
+    process.exit(0);
+  });
+
+  process.on('SIGTERM', () => {
+    log('info', 'Received SIGTERM, shutting down gracefully');
+    process.exit(0);
+  });
+
+  if (useHttp) {
+    await runHttpServer();
+  } else {
+    await runStdioServer();
   }
 }
 
