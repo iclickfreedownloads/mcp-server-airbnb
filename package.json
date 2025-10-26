@@ -29,11 +29,13 @@
   },
   "files": [
     "dist",
-    "sync-version.js"
+    "sync-version.js",
+    "prepare.js"
   ],
   "scripts": {
     "build": "node sync-version.js && tsc && shx chmod +x dist/*.js",
-    "prepare": "npm run build",
+    "prepare": "node prepare.js",
+    "prepublishOnly": "npm run build",
     "watch": "tsc --watch",
     "sync-version": "node sync-version.js"
   },
