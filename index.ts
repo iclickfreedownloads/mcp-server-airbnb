@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { photoAnalysisTools, handlePhotoAnalysisTool } from './photoTools.js';
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -134,10 +133,127 @@ const AIRBNB_LISTING_DETAILS_TOOL = {
   }
 };
 
+const AIRBNB_PRICE_COMPARISON_TOOL = {
+  name: "airbnb_compare_prices",
+  description: "Compare prices for a listing across multiple date ranges to find the best booking dates",
+  inputSchema: {
+    type: "object",
+    properties: {
+      id: {
+        type: "string",
+        description: "The Airbnb listing ID"
+      },
+      dateRanges: {
+        type: "array",
+        description: "Array of date ranges to compare, each with checkin and checkout dates",
+        items: {
+          type: "object",
+          properties: {
+            checkin: {
+              type: "string",
+              description: "Check-in date (YYYY-MM-DD)"
+            },
+            checkout: {
+              type: "string",
+              description: "Check-out date (YYYY-MM-DD)"
+            }
+          },
+          required: ["checkin", "checkout"]
+        }
+      },
+      adults: {
+        type: "number",
+        description: "Number of adults"
+      },
+      children: {
+        type: "number",
+        description: "Number of children"
+      },
+      infants: {
+        type: "number",
+        description: "Number of infants"
+      },
+      pets: {
+        type: "number",
+        description: "Number of pets"
+      },
+      ignoreRobotsText: {
+        type: "boolean",
+        description: "Ignore robots.txt rules for this request"
+      }
+    },
+    required: ["id", "dateRanges"]
+  }
+};
+
+const AIRBNB_REVIEWS_TOOL = {
+  name: "airbnb_get_reviews",
+  description: "Extract reviews and ratings from an Airbnb listing",
+  inputSchema: {
+    type: "object",
+    properties: {
+      id: {
+        type: "string",
+        description: "The Airbnb listing ID"
+      },
+      ignoreRobotsText: {
+        type: "boolean",
+        description: "Ignore robots.txt rules for this request"
+      }
+    },
+    required: ["id"]
+  }
+};
+
+const AIRBNB_COST_BREAKDOWN_TOOL = {
+  name: "airbnb_cost_breakdown",
+  description: "Get detailed cost breakdown including all fees for a booking",
+  inputSchema: {
+    type: "object",
+    properties: {
+      id: {
+        type: "string",
+        description: "The Airbnb listing ID"
+      },
+      checkin: {
+        type: "string",
+        description: "Check-in date (YYYY-MM-DD)"
+      },
+      checkout: {
+        type: "string",
+        description: "Check-out date (YYYY-MM-DD)"
+      },
+      adults: {
+        type: "number",
+        description: "Number of adults"
+      },
+      children: {
+        type: "number",
+        description: "Number of children"
+      },
+      infants: {
+        type: "number",
+        description: "Number of infants"
+      },
+      pets: {
+        type: "number",
+        description: "Number of pets"
+      },
+      ignoreRobotsText: {
+        type: "boolean",
+        description: "Ignore robots.txt rules for this request"
+      }
+    },
+    required: ["id", "checkin", "checkout"]
+  }
+};
+
 const AIRBNB_TOOLS = [
   AIRBNB_SEARCH_TOOL,
   AIRBNB_LISTING_DETAILS_TOOL,
-  ...photoAnalysisTools,
+  AIRBNB_PRICE_COMPARISON_TOOL,
+  AIRBNB_REVIEWS_TOOL,
+  AIRBNB_COST_BREAKDOWN_TOOL,
 ];
 
 const USER_AGENT = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)";
@@ -581,7 +697,405 @@ async function handleAirbnbListingDetails(params: any) {
       id,
       url: listingUrl.toString()
     });
-    
+
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          error: error instanceof Error ? error.message : String(error),
+          listingUrl: listingUrl.toString(),
+          timestamp: new Date().toISOString()
+        }, null, 2)
+      }],
+      isError: true
+    };
+  }
+}
+
+async function handlePriceComparison(params: any) {
+  const {
+    id,
+    dateRanges,
+    adults = 1,
+    children = 0,
+    infants = 0,
+    pets = 0,
+    ignoreRobotsText = false,
+  } = params;
+
+  if (!Array.isArray(dateRanges) || dateRanges.length === 0) {
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          error: "dateRanges must be a non-empty array"
+        }, null, 2)
+      }],
+      isError: true
+    };
+  }
+
+  try {
+    log('info', 'Comparing prices across date ranges', { id, rangeCount: dateRanges.length });
+
+    const priceComparisons = [];
+
+    for (const range of dateRanges) {
+      const listingUrl = new URL(`${BASE_URL}/rooms/${id}`);
+
+      if (range.checkin) listingUrl.searchParams.append("check_in", range.checkin);
+      if (range.checkout) listingUrl.searchParams.append("check_out", range.checkout);
+
+      const adults_int = parseInt(adults.toString());
+      const children_int = parseInt(children.toString());
+      const infants_int = parseInt(infants.toString());
+      const pets_int = parseInt(pets.toString());
+
+      const totalGuests = adults_int + children_int;
+      if (totalGuests > 0) {
+        listingUrl.searchParams.append("adults", adults_int.toString());
+        listingUrl.searchParams.append("children", children_int.toString());
+        listingUrl.searchParams.append("infants", infants_int.toString());
+        listingUrl.searchParams.append("pets", pets_int.toString());
+      }
+
+      const path = listingUrl.pathname + listingUrl.search;
+      if (!ignoreRobotsText && !isPathAllowed(path)) {
+        priceComparisons.push({
+          checkin: range.checkin,
+          checkout: range.checkout,
+          error: robotsErrorMessage,
+          url: listingUrl.toString()
+        });
+        continue;
+      }
+
+      try {
+        const response = await fetchWithUserAgent(listingUrl.toString());
+        const html = await response.text();
+        const $ = cheerio.load(html);
+
+        const scriptElement = $("#data-deferred-state-0").first();
+        if (scriptElement.length === 0) {
+          throw new Error("Could not find data script element");
+        }
+
+        const scriptContent = $(scriptElement).text();
+        if (!scriptContent) {
+          throw new Error("Data script element is empty");
+        }
+
+        const clientData = JSON.parse(scriptContent).niobeClientData[0][1];
+        const sections = clientData.data.presentation.stayProductDetailPage.sections.sections;
+
+        // Extract price information
+        let priceInfo: any = {
+          checkin: range.checkin,
+          checkout: range.checkout,
+          url: listingUrl.toString()
+        };
+
+        // Try to find pricing section
+        for (const section of sections) {
+          if (section.section && section.section.structuredDisplayPrice) {
+            const pricing = section.section.structuredDisplayPrice;
+            if (pricing.primaryLine) {
+              priceInfo.displayPrice = pricing.primaryLine.accessibilityLabel || pricing.primaryLine.price;
+            }
+            if (pricing.secondaryLine) {
+              priceInfo.priceDetails = pricing.secondaryLine.accessibilityLabel;
+            }
+            if (pricing.explanationData) {
+              priceInfo.breakdown = pricing.explanationData;
+            }
+          }
+        }
+
+        priceComparisons.push(priceInfo);
+      } catch (parseError) {
+        priceComparisons.push({
+          checkin: range.checkin,
+          checkout: range.checkout,
+          error: parseError instanceof Error ? parseError.message : String(parseError),
+          url: listingUrl.toString()
+        });
+      }
+    }
+
+    log('info', 'Price comparison completed', {
+      id,
+      successfulComparisons: priceComparisons.filter(c => !c.error).length
+    });
+
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          listingId: id,
+          comparisons: priceComparisons
+        }, null, 2)
+      }],
+      isError: false
+    };
+  } catch (error) {
+    log('error', 'Price comparison failed', {
+      error: error instanceof Error ? error.message : String(error),
+      id
+    });
+
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          error: error instanceof Error ? error.message : String(error),
+          listingId: id,
+          timestamp: new Date().toISOString()
+        }, null, 2)
+      }],
+      isError: true
+    };
+  }
+}
+
+async function handleReviews(params: any) {
+  const {
+    id,
+    ignoreRobotsText = false,
+  } = params;
+
+  const listingUrl = new URL(`${BASE_URL}/rooms/${id}`);
+
+  const path = listingUrl.pathname + listingUrl.search;
+  if (!ignoreRobotsText && !isPathAllowed(path)) {
+    log('warn', 'Reviews blocked by robots.txt', { path, url: listingUrl.toString() });
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          error: robotsErrorMessage,
+          url: listingUrl.toString(),
+          suggestion: "Consider enabling 'ignore_robots_txt' in extension settings if needed for testing"
+        }, null, 2)
+      }],
+      isError: true
+    };
+  }
+
+  try {
+    log('info', 'Fetching reviews', { id });
+
+    const response = await fetchWithUserAgent(listingUrl.toString());
+    const html = await response.text();
+    const $ = cheerio.load(html);
+
+    let reviewsData: any = {
+      listingId: id,
+      url: listingUrl.toString()
+    };
+
+    try {
+      const scriptElement = $("#data-deferred-state-0").first();
+      if (scriptElement.length === 0) {
+        throw new Error("Could not find data script element");
+      }
+
+      const scriptContent = $(scriptElement).text();
+      if (!scriptContent) {
+        throw new Error("Data script element is empty");
+      }
+
+      const clientData = JSON.parse(scriptContent).niobeClientData[0][1];
+      const sections = clientData.data.presentation.stayProductDetailPage.sections.sections;
+
+      // Extract review information
+      for (const section of sections) {
+        if (section.sectionId === "REVIEWS_DEFAULT" && section.section) {
+          reviewsData.reviewsSection = {
+            title: section.section.title,
+            reviews: section.section.reviews || []
+          };
+        }
+
+        // Look for overall rating
+        if (section.section && section.section.reviewDetailsModal) {
+          reviewsData.overallRating = section.section.reviewDetailsModal;
+        }
+      }
+
+      log('info', 'Reviews fetched successfully', {
+        id,
+        reviewCount: reviewsData.reviewsSection?.reviews?.length || 0
+      });
+    } catch (parseError) {
+      log('error', 'Failed to parse reviews', {
+        error: parseError instanceof Error ? parseError.message : String(parseError),
+        id
+      });
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            error: "Failed to parse reviews from Airbnb. The page structure may have changed.",
+            details: parseError instanceof Error ? parseError.message : String(parseError),
+            listingUrl: listingUrl.toString()
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify(reviewsData, null, 2)
+      }],
+      isError: false
+    };
+  } catch (error) {
+    log('error', 'Reviews request failed', {
+      error: error instanceof Error ? error.message : String(error),
+      id
+    });
+
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          error: error instanceof Error ? error.message : String(error),
+          listingUrl: listingUrl.toString(),
+          timestamp: new Date().toISOString()
+        }, null, 2)
+      }],
+      isError: true
+    };
+  }
+}
+
+async function handleCostBreakdown(params: any) {
+  const {
+    id,
+    checkin,
+    checkout,
+    adults = 1,
+    children = 0,
+    infants = 0,
+    pets = 0,
+    ignoreRobotsText = false,
+  } = params;
+
+  const listingUrl = new URL(`${BASE_URL}/rooms/${id}`);
+
+  if (checkin) listingUrl.searchParams.append("check_in", checkin);
+  if (checkout) listingUrl.searchParams.append("check_out", checkout);
+
+  const adults_int = parseInt(adults.toString());
+  const children_int = parseInt(children.toString());
+  const infants_int = parseInt(infants.toString());
+  const pets_int = parseInt(pets.toString());
+
+  const totalGuests = adults_int + children_int;
+  if (totalGuests > 0) {
+    listingUrl.searchParams.append("adults", adults_int.toString());
+    listingUrl.searchParams.append("children", children_int.toString());
+    listingUrl.searchParams.append("infants", infants_int.toString());
+    listingUrl.searchParams.append("pets", pets_int.toString());
+  }
+
+  const path = listingUrl.pathname + listingUrl.search;
+  if (!ignoreRobotsText && !isPathAllowed(path)) {
+    log('warn', 'Cost breakdown blocked by robots.txt', { path, url: listingUrl.toString() });
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          error: robotsErrorMessage,
+          url: listingUrl.toString(),
+          suggestion: "Consider enabling 'ignore_robots_txt' in extension settings if needed for testing"
+        }, null, 2)
+      }],
+      isError: true
+    };
+  }
+
+  try {
+    log('info', 'Fetching cost breakdown', { id, checkin, checkout });
+
+    const response = await fetchWithUserAgent(listingUrl.toString());
+    const html = await response.text();
+    const $ = cheerio.load(html);
+
+    let costData: any = {
+      listingId: id,
+      checkin,
+      checkout,
+      url: listingUrl.toString()
+    };
+
+    try {
+      const scriptElement = $("#data-deferred-state-0").first();
+      if (scriptElement.length === 0) {
+        throw new Error("Could not find data script element");
+      }
+
+      const scriptContent = $(scriptElement).text();
+      if (!scriptContent) {
+        throw new Error("Data script element is empty");
+      }
+
+      const clientData = JSON.parse(scriptContent).niobeClientData[0][1];
+      const sections = clientData.data.presentation.stayProductDetailPage.sections.sections;
+
+      // Extract pricing and cost information
+      for (const section of sections) {
+        if (section.section && section.section.structuredDisplayPrice) {
+          const pricing = section.section.structuredDisplayPrice;
+
+          costData.displayPrice = pricing.primaryLine?.accessibilityLabel || pricing.primaryLine?.price;
+          costData.priceDetails = pricing.secondaryLine?.accessibilityLabel;
+
+          if (pricing.explanationData) {
+            costData.breakdown = {
+              title: pricing.explanationData.title,
+              items: pricing.explanationData.priceDetails?.items || []
+            };
+          }
+        }
+      }
+
+      log('info', 'Cost breakdown fetched successfully', { id });
+    } catch (parseError) {
+      log('error', 'Failed to parse cost breakdown', {
+        error: parseError instanceof Error ? parseError.message : String(parseError),
+        id
+      });
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            error: "Failed to parse cost breakdown from Airbnb. The page structure may have changed.",
+            details: parseError instanceof Error ? parseError.message : String(parseError),
+            listingUrl: listingUrl.toString()
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify(costData, null, 2)
+      }],
+      isError: false
+    };
+  } catch (error) {
+    log('error', 'Cost breakdown request failed', {
+      error: error instanceof Error ? error.message : String(error),
+      id
+    });
+
     return {
       content: [{
         type: "text",
@@ -663,9 +1177,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
         break;
       }
 
-      case "getListingPhotos":
-      case "analyzeListingPhotos": {
-        result = await handlePhotoAnalysisTool(request.params.name, request.params.arguments);
+      case "airbnb_compare_prices": {
+        result = await handlePriceComparison(request.params.arguments);
+        break;
+      }
+
+      case "airbnb_get_reviews": {
+        result = await handleReviews(request.params.arguments);
+        break;
+      }
+
+      case "airbnb_cost_breakdown": {
+        result = await handleCostBreakdown(request.params.arguments);
         break;
       }
 

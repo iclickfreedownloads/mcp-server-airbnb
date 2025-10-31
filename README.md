@@ -19,6 +19,17 @@ A comprehensive Desktop Extension for searching Airbnb listings with advanced fi
 - **Property descriptions** and key features
 - **Direct links** to Airbnb listings for easy booking
 
+### 💰 Smart Pricing & Cost Analysis
+- **Price comparison** across multiple date ranges to find the best booking dates
+- **Detailed cost breakdown** including all fees, taxes, and service charges
+- **Transparent pricing** with line-item breakdowns
+- **Cost optimization** to help users make informed booking decisions
+
+### ⭐ Review & Rating Analysis
+- **Review extraction** from listings
+- **Rating summaries** and overall scores
+- **Review statistics** to assess property reputation
+
 ### 🛡️ Security & Compliance
 - **Robots.txt compliance** with configurable override for testing
 - **Request timeout management** to prevent hanging requests
@@ -131,6 +142,61 @@ Get detailed information about a specific Airbnb listing.
   - House rules and policies
   - Property highlights and descriptions
   - Direct link to the listing
+
+### `airbnb_compare_prices`
+
+Compare prices for a listing across multiple date ranges to find the best booking dates.
+
+**Parameters:**
+- `id` (required): Airbnb listing ID
+- `dateRanges` (required): Array of date ranges to compare, each with:
+  - `checkin`: Check-in date in YYYY-MM-DD format
+  - `checkout`: Check-out date in YYYY-MM-DD format
+- `adults` (optional): Number of adults (default: 1)
+- `children` (optional): Number of children (default: 0)
+- `infants` (optional): Number of infants (default: 0)
+- `pets` (optional): Number of pets (default: 0)
+- `ignoreRobotsText` (optional): Override robots.txt for this request
+
+**Returns:**
+- Price comparisons across all specified date ranges
+- Display prices and detailed pricing breakdowns
+- Listing URL for each date range
+
+### `airbnb_get_reviews`
+
+Extract reviews and ratings from an Airbnb listing.
+
+**Parameters:**
+- `id` (required): Airbnb listing ID
+- `ignoreRobotsText` (optional): Override robots.txt for this request
+
+**Returns:**
+- Overall rating information
+- Review summaries and details
+- Review statistics and metadata
+- Direct link to the listing
+
+### `airbnb_cost_breakdown`
+
+Get detailed cost breakdown including all fees for a specific booking.
+
+**Parameters:**
+- `id` (required): Airbnb listing ID
+- `checkin` (required): Check-in date in YYYY-MM-DD format
+- `checkout` (required): Check-out date in YYYY-MM-DD format
+- `adults` (optional): Number of adults (default: 1)
+- `children` (optional): Number of children (default: 0)
+- `infants` (optional): Number of infants (default: 0)
+- `pets` (optional): Number of pets (default: 0)
+- `ignoreRobotsText` (optional): Override robots.txt for this request
+
+**Returns:**
+- Total cost with detailed breakdown
+- Nightly rate information
+- Service fees, cleaning fees, and taxes
+- Price details by line item
+- Direct link to the listing
 
 ## Technical Details
 
