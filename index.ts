@@ -6,6 +6,11 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema,
+  ListResourcesRequestSchema,
+  ListResourceTemplatesRequestSchema,
+  ReadResourceRequestSchema,
   Tool,
   McpError,
   ErrorCode,
@@ -88,7 +93,14 @@ const AIRBNB_SEARCH_TOOL = {
       }
     },
     required: ["location"]
-  }
+  },
+  annotations: {
+    title: "Search Airbnb Listings",
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: true,
+  },
 };
 
 const AIRBNB_LISTING_DETAILS_TOOL = {
@@ -131,7 +143,14 @@ const AIRBNB_LISTING_DETAILS_TOOL = {
       }
     },
     required: ["id"]
-  }
+  },
+  annotations: {
+    title: "Get Listing Details",
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: true,
+  },
 };
 
 const AIRBNB_TOOLS = [
@@ -596,14 +615,27 @@ async function handleAirbnbListingDetails(params: any) {
   }
 }
 
+const SERVER_ICON = `data:image/svg+xml;base64,${Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none"><rect width="64" height="64" rx="12" fill="#FF5A5F"/><path d="M32 16C27.6 16 24 19.6 24 24c0 6.4 8 16 8 16s8-9.6 8-16c0-4.4-3.6-8-8-8zm0 11a3 3 0 110-6 3 3 0 010 6z" fill="white"/><path d="M20 34c-2.2 0-4 1.8-4 4v8c0 1.1.9 2 2 2h28c1.1 0 2-.9 2-2v-8c0-2.2-1.8-4-4-4H20zm2 10v-4h4v4h-4zm8 0v-4h4v4h-4zm8 0v-4h4v4h-4z" fill="white" opacity="0.9"/></svg>`).toString('base64')}`;
+
 const server = new Server(
   {
     name: "airbnb",
     version: VERSION,
+    title: "Airbnb Search & Listings",
+    websiteUrl: "https://github.com/openbnb-org/mcp-server-airbnb",
+    icons: [
+      {
+        src: SERVER_ICON,
+        mimeType: "image/svg+xml",
+        sizes: ["any"],
+      },
+    ],
   },
   {
     capabilities: {
       tools: {},
+      prompts: {},
+      resources: {},
     },
   },
 );
@@ -629,6 +661,117 @@ log('info', 'Airbnb MCP Server starting', {
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: AIRBNB_TOOLS,
 }));
+
+// --- Prompts ---
+
+const PROMPTS = [
+  {
+    name: "search_airbnb",
+    title: "Search Airbnb",
+    description: "Search for Airbnb listings in a specific location with optional filters",
+    arguments: [
+      { name: "location", description: "City, neighborhood, or area to search (e.g. 'Paris, France')", required: true },
+      { name: "checkin", description: "Check-in date in YYYY-MM-DD format", required: false },
+      { name: "checkout", description: "Check-out date in YYYY-MM-DD format", required: false },
+      { name: "guests", description: "Number of guests", required: false },
+    ],
+  },
+  {
+    name: "listing_details",
+    title: "Get Listing Details",
+    description: "Get detailed information about a specific Airbnb listing by its ID",
+    arguments: [
+      { name: "id", description: "The Airbnb listing ID (numeric)", required: true },
+    ],
+  },
+];
+
+server.setRequestHandler(ListPromptsRequestSchema, async () => ({
+  prompts: PROMPTS,
+}));
+
+server.setRequestHandler(GetPromptRequestSchema, async (request: any) => {
+  const { name, arguments: args } = request.params;
+
+  if (name === "search_airbnb") {
+    const location = args?.location || "popular destinations";
+    const checkin = args?.checkin ? ` checking in on ${args.checkin}` : "";
+    const checkout = args?.checkout ? ` and checking out on ${args.checkout}` : "";
+    const guests = args?.guests ? ` for ${args.guests} guest(s)` : "";
+
+    return {
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: `Search for Airbnb listings in ${location}${checkin}${checkout}${guests}. Show me the best options with prices, ratings, and direct links.`,
+          },
+        },
+      ],
+    };
+  }
+
+  if (name === "listing_details") {
+    const id = args?.id;
+    if (!id) {
+      throw new McpError(ErrorCode.InvalidParams, "Listing ID is required");
+    }
+
+    return {
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: `Get the full details for Airbnb listing ${id}. Include amenities, location info, house rules, pricing, and a direct link. Also retrieve photos if available.`,
+          },
+        },
+      ],
+    };
+  }
+
+  throw new McpError(ErrorCode.InvalidParams, `Unknown prompt: ${name}`);
+});
+
+// --- Resources ---
+
+server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+  resources: [],
+}));
+
+server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({
+  resourceTemplates: [
+    {
+      uriTemplate: "airbnb://listing/{id}",
+      name: "Airbnb Listing",
+      description: "Detailed information about a specific Airbnb listing",
+      mimeType: "application/json",
+    },
+  ],
+}));
+
+server.setRequestHandler(ReadResourceRequestSchema, async (request: any) => {
+  const uri = request.params.uri;
+  const match = uri.match(/^airbnb:\/\/listing\/(.+)$/);
+
+  if (!match) {
+    throw new McpError(ErrorCode.InvalidParams, `Unknown resource URI: ${uri}`);
+  }
+
+  const listingId = match[1];
+  const result = await handleAirbnbListingDetails({ id: listingId });
+
+  return {
+    contents: [
+      {
+        uri,
+        mimeType: "application/json",
+        text: result.content[0].text,
+      },
+    ],
+  };
+});
 
 server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
   const startTime = Date.now();

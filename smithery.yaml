@@ -5,11 +5,18 @@ startCommand:
   configSchema:
     # JSON Schema defining the configuration options for the MCP.
     type: object
+    title: Airbnb MCP Server Configuration
+    description: Configuration options for the Airbnb MCP server
     properties:
       ignoreRobotsTxt:
         type: boolean
+        title: Ignore robots.txt
         default: false
-        description: If set to true, the server will ignore robots.txt rules.
+        description: >-
+          If set to true, the server will ignore robots.txt rules when
+          making requests to Airbnb. Use with caution and respect
+          Airbnb's terms of service.
+    additionalProperties: false
   commandFunction:
     # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
     |-
