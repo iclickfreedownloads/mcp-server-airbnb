@@ -13,6 +13,6 @@ startCommand:
   commandFunction:
     # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
     |-
-    (config) => { const args = ['dist/index.js']; if (config.ignoreRobotsTxt) { args.push('--ignore-robots-txt'); } return { command: 'node', args }; }
+    (config) => { const args = ['-y', '@openbnb/mcp-server-airbnb']; if (config.ignoreRobotsTxt) { args.push('--ignore-robots-txt'); } return { command: 'npx', args }; }
   exampleConfig:
     ignoreRobotsTxt: false

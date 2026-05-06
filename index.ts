@@ -182,7 +182,7 @@ async function fetchRobotsTxt() {
   }
 }
 
-function isPathAllowed(path) {  
+function isPathAllowed(path: string): boolean {
   if (!robotsTxtContent) {
     return true;
   }
@@ -190,11 +190,11 @@ function isPathAllowed(path) {
   try {
     const robots = robotsParser(`${BASE_URL}/robots.txt`, robotsTxtContent);
     const allowed = robots.isAllowed(path, USER_AGENT);
-    
+
     if (!allowed) {
       log('warn', 'Path disallowed by robots.txt', { path, userAgent: USER_AGENT });
     }
-    
+
     return allowed;
   } catch (error) {
     log('warn', 'Error parsing robots.txt, allowing path', {
@@ -205,10 +205,10 @@ function isPathAllowed(path) {
   }
 }
 
-async function fetchWithUserAgent(url, timeout = 30000) {
+async function fetchWithUserAgent(url: string, timeout = 30000) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
-  
+
   try {
     const response = await fetch(url, {
       headers: {
@@ -219,26 +219,26 @@ async function fetchWithUserAgent(url, timeout = 30000) {
       },
       signal: controller.signal
     });
-    
+
     clearTimeout(timeoutId);
-    
+
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
-    
+
     return response;
   } catch (error) {
     clearTimeout(timeoutId);
-    
+
     if (error instanceof Error && error.name === 'AbortError') {
       throw new Error(`Request timeout after ${timeout}ms`);
     }
-    
+
     throw error;
   }
 }
 
-async function handleAirbnbSearch(params) {
+async function handleAirbnbSearch(params: any) {
   const {
     location,
     placeId,
@@ -341,12 +341,12 @@ async function handleAirbnbSearch(params) {
 
   try {
     log('info', 'Performing Airbnb search', { location, checkin, checkout, adults, children });
-    
+
     const response = await fetchWithUserAgent(searchUrl.toString());
     const html = await response.text();
     const $ = cheerio.load(html);
-    
-    let staysSearchResults = {};
+
+    let staysSearchResults: any = {};
     
     try {
       const scriptElement = $("#data-deferred-state-0").first();
@@ -365,8 +365,8 @@ async function handleAirbnbSearch(params) {
       
       staysSearchResults = {
         searchResults: results.searchResults
-          .map((result) => flattenArraysInObject(pickBySchema(result, allowSearchResultSchema)))
-          .map((result) => {
+          .map((result: any) => flattenArraysInObject(pickBySchema(result, allowSearchResultSchema)))
+          .map((result: any) => {
             const id = atob(result.demandStayListing.id).split(":")[1];
             return {id, url: `${BASE_URL}/rooms/${id}`, ...result }
           }),
@@ -425,7 +425,7 @@ async function handleAirbnbSearch(params) {
   }
 }
 
-async function handleAirbnbListingDetails(params) {
+async function handleAirbnbListingDetails(params: any) {
   const {
     id,
     checkin,
@@ -530,14 +530,14 @@ async function handleAirbnbListingDetails(params) {
       
       const clientData = JSON.parse(scriptContent).niobeClientData[0][1];
       const sections = clientData.data.presentation.stayProductDetailPage.sections.sections;
-      sections.forEach((section) => cleanObject(section));
-      
+      sections.forEach((section: any) => cleanObject(section));
+
       details = sections
-        .filter((section) => allowSectionSchema.hasOwnProperty(section.sectionId))
-        .map((section) => {
+        .filter((section: any) => allowSectionSchema.hasOwnProperty(section.sectionId))
+        .map((section: any) => {
           return {
             id: section.sectionId,
-            ...flattenArraysInObject(pickBySchema(section.section, allowSectionSchema[section.sectionId]))
+            ...flattenArraysInObject(pickBySchema(section.section, allowSectionSchema[section.sectionId as keyof typeof allowSectionSchema]))
           }
         });
         
@@ -608,10 +608,10 @@ const server = new Server(
   },
 );
 
-function log(level, message, data) {
+function log(level: string, message: string, data?: any) {
   const timestamp = new Date().toISOString();
   const logMessage = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
-  
+
   if (data) {
     console.error(`${logMessage}:`, JSON.stringify(data, null, 2));
   } else {
@@ -630,21 +630,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: AIRBNB_TOOLS,
 }));
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
+server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
   const startTime = Date.now();
-  
+
   try {
     if (!request.params.name) {
       throw new McpError(ErrorCode.InvalidParams, "Tool name is required");
     }
-    
+
     if (!request.params.arguments) {
       throw new McpError(ErrorCode.InvalidParams, "Tool arguments are required");
     }
-    
-    log('info', 'Tool call received', { 
+
+    log('info', 'Tool call received', {
       tool: request.params.name,
-      arguments: request.params.arguments 
+      arguments: request.params.arguments
     });
     
     if (!robotsTxtContent && !IGNORE_ROBOTS_TXT) {

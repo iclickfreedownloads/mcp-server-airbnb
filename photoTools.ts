@@ -25,7 +25,7 @@ export const photoAnalysisTools = [
   },
 ];
 
-export async function handlePhotoAnalysisTool(toolName, toolInput) {
+export async function handlePhotoAnalysisTool(toolName: string, toolInput: any) {
   try {
     const listingId = toolInput.id;
     if (!listingId) {
@@ -76,7 +76,7 @@ export async function handlePhotoAnalysisTool(toolName, toolInput) {
     };
   } catch (error) {
     return {
-      content: [{ type: 'text', text: JSON.stringify({ error: error.message }) }],
+      content: [{ type: 'text', text: JSON.stringify({ error: (error instanceof Error ? error.message : 'Unknown error') }) }],
       isError: true,
     };
   }
